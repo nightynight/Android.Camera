@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Android.camera by nightynight</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Android.camera</h1>
+      <h2 class="project-tagline"></h2>
+      <a href="https://github.com/nightynight/Android.Camera" class="btn">View on GitHub</a>
+      <a href="https://github.com/nightynight/Android.Camera/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/nightynight/Android.Camera/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h2>
+<a id="android调用相机拍照可分为两步发送拍照意图和处理返回结果" class="anchor" href="#android%E8%B0%83%E7%94%A8%E7%9B%B8%E6%9C%BA%E6%8B%8D%E7%85%A7%E5%8F%AF%E5%88%86%E4%B8%BA%E4%B8%A4%E6%AD%A5%E5%8F%91%E9%80%81%E6%8B%8D%E7%85%A7%E6%84%8F%E5%9B%BE%E5%92%8C%E5%A4%84%E7%90%86%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Android调用相机拍照可分为两步：发送拍照意图和处理返回结果。</h2>
+
+<p>首先在manifest中进行相关配置：</p>
+
+<pre><code>&lt;uses-feature android:name="android.hardware.camera"
+              android:required="true" /&gt;
+</code></pre>
+
+<p>如果我们的应用使用相机，但相机并不是应用的正常运行所必不可少的组件，可以将android:required设置为"false"。这样的话，Google Play 也会允许没有相机的设备下载该应用。</p>
+
+<h4>
+<a id="发送拍照意图" class="anchor" href="#%E5%8F%91%E9%80%81%E6%8B%8D%E7%85%A7%E6%84%8F%E5%9B%BE" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>发送拍照意图：</h4>
+
+<pre><code>static final int REQUEST_IMAGE_CAPTURE = 1;
+private void dispatchTakePictureIntent() {
+    Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+    if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+        startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+    }
+}
+</code></pre>
+
+<p>注意在调用startActivityForResult()方法之前，先调用resolveActivity()，这个方法会返回能处理该Intent的第一个Activity（译注：即检查有没有能处理这个Intent的Activity）。执行这个检查非常重要，因为如果在调用startActivityForResult()时，没有应用能处理你的Intent，应用将会崩溃。所以只要返回结果不为null，使用该Intent就是安全的。</p>
+
+<h4>
+<a id="处理返回结果" class="anchor" href="#%E5%A4%84%E7%90%86%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>处理返回结果：</h4>
+
+<p>Android的相机应用会把拍好的照片编码为缩小的Bitmap，使用extra value的方式添加到返回的Intent当中，并传送给onActivityResult()，对应的Key为"data"。下面的代码展示的是如何获取这一图片并显示在ImageView上。</p>
+
+<pre><code>@Override
+protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    if (requestCode == REQUEST_IMAGE_CAPTURE &amp;&amp; resultCode == RESULT_OK) {
+        Bundle extras = data.getExtras();
+        Bitmap imageBitmap = (Bitmap) extras.get("data");
+        mImageView.setImageBitmap(imageBitmap);
+    }
+}
+</code></pre>
+
+<h2>
+<a id="保存全尺寸图片" class="anchor" href="#%E4%BF%9D%E5%AD%98%E5%85%A8%E5%B0%BA%E5%AF%B8%E5%9B%BE%E7%89%87" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>保存全尺寸图片</h2>
+
+<p>首先加入相关权限：</p>
+
+<pre><code>&lt;uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" /&gt;
+</code></pre>
+
+<p>当发送的intent调用intent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFile))时，相机会把拍好的照片写入photoFile这个文件中。
+那么我们想要创建这个文件：</p>
+
+<pre><code>private String mCurrentPhotoPath;
+private File createImageFile() throws IOException {
+    // Create an image file name
+    String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    String imageFileName = "JPEG_" + timeStamp + "_";
+    File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+    //先创建一个临时文件，相机拍完照后把数据写到这个临时文件中
+    File image = File.createTempFile(
+            imageFileName,  /* prefix */
+            ".jpg",         /* suffix */
+            storageDir      /* directory */
+    );
+    mCurrentPhotoPath = image.getAbsolutePath();
+    return image;
+}
+</code></pre>
+
+<p>这里使用日期时间戳作为新照片的文件名，就是为了保证图片名的唯一性。
+现在我们可以像这样创建并触发一个Intent：</p>
+
+<pre><code>private void dispatchTakePictureIntent() {
+    Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+    if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+        // Create the File where the photo should go
+        File photoFile = null;
+        try {
+            photoFile = createImageFile();
+        } catch (IOException ex) {
+            // Error occurred while creating the File
+        }
+        // Continue only if the File was successfully created
+        if (photoFile != null) {
+            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT,Uri.fromFile(photoFile));
+            startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
+        }
+    }
+}
+</code></pre>
+
+<p>当拍完照之后，图片就写入了photoFile文件中。但此时返回的ActivityResult中就没有Bitmap对象了。此时如果我们要在imageView中显示照片，可以从photoFile文件中获取。</p>
+
+<h2>
+<a id="将照片添加到系统相册中" class="anchor" href="#%E5%B0%86%E7%85%A7%E7%89%87%E6%B7%BB%E5%8A%A0%E5%88%B0%E7%B3%BB%E7%BB%9F%E7%9B%B8%E5%86%8C%E4%B8%AD" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>将照片添加到系统相册中</h2>
+
+<pre><code>private void galleryAddPic() {
+    Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+    File f = new File(mCurrentPhotoPath);
+    Uri contentUri = Uri.fromFile(f);
+    mediaScanIntent.setData(contentUri);//把图片的Uri放入intent中
+    this.sendBroadcast(mediaScanIntent);//发送广播，系统会把该文件写入相册
+}
+</code></pre>
+
+<p>只需在合适的地方调用该方法就可以把图片添加到相册中，比如在onActivityResult中</p>
+
+<pre><code>@Override
+protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    if (requestCode == REQUEST_IMAGE_CAPTURE &amp;&amp; resultCode == RESULT_OK) {
+        galleryAddPic(mCurrentPhotoPath);
+    }
+}
+</code></pre>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/nightynight/Android.Camera">Android.camera</a> is maintained by <a href="https://github.com/nightynight">nightynight</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
